@@ -59,10 +59,11 @@ class Detector(abc.ABC):
         self.true_hits_buffer.clear()
         self.fake_hits_buffer.clear()
         self.seed = seed
+        self.rng = np.random.default_rng(seed)
 
     # геометрия
     def area(self):
-        return (2 * self.size_x) * (2 * self.size_y)
+        return self.size_x * self.size_y
 
     def register(self, hit, particle: Particle, hit_number):
         x = hit[0]
@@ -84,7 +85,8 @@ class Detector(abc.ABC):
         hits = []
         hit_id = hit_id_start
 
-        self.rng = np.random.default_rng(self.seed)
+        if not hasattr(self, "rng"):
+            self.rng = np.random.default_rng(self.seed)
 
         self.register_hits()
 
@@ -173,8 +175,8 @@ class NaiveDetector(Detector):
                 self.true_hits_buffer.append((x, y, pid, hit_number))
 
         n_noise = self.rng.poisson(self.noise_rate * len(self.raw_hits_buffer))
-        x_noise = self.rng.uniform(-self.size_x, self.size_x, n_noise)
-        y_noise = self.rng.uniform(-self.size_y, self.size_y, n_noise)
+        x_noise = self.rng.uniform(self.center_x - self.size_x / 2, self.center_x + self.size_x / 2, n_noise)
+        y_noise = self.rng.uniform(self.center_y - self.size_y / 2, self.center_y + self.size_y / 2, n_noise)
         for i in range(n_noise):
             self.fake_hits_buffer.append((x_noise[i], y_noise[i], "noise"))
 
@@ -186,3 +188,4 @@ class NaiveDetector(Detector):
 
 
 register_detector(NaiveDetector)
+

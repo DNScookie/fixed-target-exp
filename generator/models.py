@@ -238,3 +238,4 @@ class MagneticField:
             "z_start": self.z_start,
             "z_end": self.z_end,
         }
+
