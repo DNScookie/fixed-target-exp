@@ -14,7 +14,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.data import Data
-from torch_geometric.nn import GCNConv, SAGEConv, GATConv, EdgeConv
+from torch_geometric.nn import (GCNConv, SAGEConv, GATConv, EdgeConv, GATv2Conv,
+                                TransformerConv, GINEConv, ResGatedGraphConv)
 from importlib.metadata import version
 
 CODE_HASH = hashlib.sha256(b''.join(p.read_bytes() for p in sorted(
@@ -61,29 +62,68 @@ def as_graph(event,k=1):
 
 
 class TrackNet(nn.Module):
-    def __init__(self,architecture='edgeconv',hidden=64,layers=3,node_task=False):
-        super().__init__();self.node_task=node_task
-        self.input_proj=nn.Linear(3,hidden)
-        def conv():
-            if architecture=='gcn':return GCNConv(hidden,hidden)
-            if architecture=='sage':return SAGEConv(hidden,hidden)
-            if architecture=='gat':return GATConv(hidden,hidden,heads=2,concat=False)
-            if architecture=='edgeconv':
-                # Independent MLP for each layer, unlike the shared historical object.
-                return EdgeConv(nn.Sequential(nn.Linear(2*hidden,hidden),nn.ReLU(),
-                                              nn.Linear(hidden,hidden)))
-            raise ValueError(architecture)
-        self.convs=nn.ModuleList([conv() for _ in range(layers)])
-        self.head=nn.Sequential(nn.Linear(hidden if node_task else 2*hidden,64),
-                               nn.ReLU(),nn.Dropout(.1),nn.Linear(64,32),
-                               nn.ReLU(),nn.Dropout(.1),nn.Linear(32,1))
+    """Edge or hit classifier with interchangeable message-passing operators.
 
-    def forward(self,data):
-        x=self.input_proj(data.x)
-        # Message-passing graph stays directed as in the source notebook.
-        for conv in self.convs:x=x+F.relu(conv(x,data.edge_index))
-        features=x if self.node_task else torch.cat([x[data.edge_index[0]],
-                                                   x[data.edge_index[1]]],dim=1)
+    Existing defaults and parameter names remain unchanged for checkpoint
+    compatibility. Geometric edge attributes are signed normalized coordinate
+    differences (destination minus source).
+    """
+    EDGE_AWARE = frozenset({'gine', 'transformer'})
+
+    def __init__(self, architecture='edgeconv', hidden=64, layers=3,
+                 node_task=False, heads=2, dropout=0.1):
+        super().__init__()
+        if hidden < 1 or layers < 1 or heads < 1 or not 0 <= dropout < 1:
+            raise ValueError('Invalid hidden/layers/heads/dropout')
+        self.node_task = node_task
+        self.architecture = architecture
+        self.dropout = dropout
+        self.input_proj = nn.Linear(3, hidden)
+
+        def conv():
+            if architecture == 'gcn':
+                return GCNConv(hidden, hidden)
+            if architecture == 'sage':
+                return SAGEConv(hidden, hidden)
+            if architecture == 'gat':
+                return GATConv(hidden, hidden, heads=heads, concat=False)
+            if architecture == 'gatv2':
+                return GATv2Conv(hidden, hidden, heads=heads, concat=False)
+            if architecture == 'transformer':
+                return TransformerConv(hidden, hidden, heads=heads,
+                                       concat=False, edge_dim=3)
+            if architecture == 'gine':
+                mlp = nn.Sequential(nn.Linear(hidden, hidden), nn.ReLU(),
+                                    nn.Linear(hidden, hidden))
+                return GINEConv(mlp, edge_dim=3)
+            if architecture == 'resgated':
+                return ResGatedGraphConv(hidden, hidden)
+            if architecture == 'edgeconv':
+                # Independent MLP per layer, preserving the previous behavior.
+                return EdgeConv(nn.Sequential(nn.Linear(2 * hidden, hidden),
+                                              nn.ReLU(), nn.Linear(hidden, hidden)))
+            raise ValueError(f'Unknown architecture: {architecture}')
+
+        self.convs = nn.ModuleList([conv() for _ in range(layers)])
+        self.head = nn.Sequential(
+            nn.Linear(hidden if node_task else 2 * hidden, 64),
+            nn.ReLU(), nn.Dropout(.1), nn.Linear(64, 32),
+            nn.ReLU(), nn.Dropout(.1), nn.Linear(32, 1))
+
+    def forward(self, data):
+        x = self.input_proj(data.x)
+        edge_attr = None
+        if self.architecture in self.EDGE_AWARE:
+            src, dst = data.edge_index
+            edge_attr = data.x[dst] - data.x[src]
+        for conv in self.convs:
+            if edge_attr is None:
+                updated = conv(x, data.edge_index)
+            else:
+                updated = conv(x, data.edge_index, edge_attr=edge_attr)
+            x = x + F.dropout(F.relu(updated), p=self.dropout, training=self.training)
+        features = x if self.node_task else torch.cat(
+            [x[data.edge_index[0]], x[data.edge_index[1]]], dim=1)
         return self.head(features).flatten()
 
 
