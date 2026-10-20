@@ -37,3 +37,4 @@ class ExperimentSetup:
             "detectors": [det.to_dict() for det in self.detectors],
             "seed": self.seed,
         }
+

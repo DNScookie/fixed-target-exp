@@ -8,7 +8,7 @@ from generator.models import Event, Hit
 
 # constants
 C_LIGHT = 299792458.0  # m/s
-CONV_0_3 = 0.3  # factor relating p[GeV/c], B[T], R[m]: p_T = 0.3 * q * B * R
+CONV_0_3 = 0.299792458  # factor relating p[GeV/c], B[T], R[m]: p_T = 0.3 * q * B * R
 
 
 def _rodrigues_rotate(vec: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
@@ -102,8 +102,8 @@ def simulate_hits(
             # move along direction by ds (approx path length ds)
             # but in curved region we will rotate momentum first by angle dtheta then advance
             if B_mag > 0 and p_perp > 1e-12:
-                # curvature kappa = q * 0.3 * B / p_perp (1/m)
-                kappa = q * CONV_0_3 * B_mag / p_perp  # 1/m
+                # Rotation per full path length: dp/ds = q C (p/|p|) x B.
+                kappa = -q * CONV_0_3 * B_mag / p_mag  # 1/m
                 # angle to rotate for path length ds:
                 dtheta = kappa * ds
                 # rotate momentum vector around B_unit by dtheta
@@ -131,7 +131,7 @@ def simulate_hits(
                 z0 = prev_pos[2]
                 z1 = pos[2]
                 # check crossing (strictly between to avoid double counting if step lands exactly on plane)
-                if (z0 <= z_plane <= z1) or (z1 <= z_plane <= z0):
+                if (z0 < z_plane <= z1) or (z1 <= z_plane < z0):
                     # ignore trivial same-z
                     if abs(z1 - z0) < 1e-12:
                         continue
@@ -149,8 +149,10 @@ def simulate_hits(
             print(f"warning: max_steps reached propagating {particle}")
 
     for det in detectors:
-        hits.extend(det.finalize_hits(event_id, hit_counter))
-        hit_counter += len(hits)
+        detector_hits = det.finalize_hits(event_id, hit_counter)
+        hits.extend(detector_hits)
+        hit_counter += len(detector_hits)
 
     # final: return hits (unsorted). Up to caller to sort/filter as needed.
     return hits
+
