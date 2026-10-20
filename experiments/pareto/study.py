@@ -71,7 +71,7 @@ class TrackNet(nn.Module):
     EDGE_AWARE = frozenset({'gine', 'transformer'})
 
     def __init__(self, architecture='edgeconv', hidden=64, layers=3,
-                 node_task=False, heads=2, dropout=0.1):
+                 node_task=False, heads=2, dropout=0.0):
         super().__init__()
         if hidden < 1 or layers < 1 or heads < 1 or not 0 <= dropout < 1:
             raise ValueError('Invalid hidden/layers/heads/dropout')
