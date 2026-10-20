@@ -15,12 +15,14 @@ def plot_frontier(state):
     s=state['summary'];folder=state['session']
     tags=s.filter_tag.unique();fig,axes=plt.subplots(1,len(tags),figsize=(5*len(tags),4),squeeze=False,sharey=True)
     colors={1:'#2878b5',2:'#e87524',3:'#e87524',4:'#e87524'}
-    markers={'gcn':'o','sage':'s','gat':'^','edgeconv':'D'}
+    markers={'gcn':'o','sage':'s','gat':'^','edgeconv':'D',
+             'gatv2':'v','transformer':'P','gine':'X','resgated':'h'}
     front=s[s.pareto].sort_values('time_ms')
     for ax,tag in zip(axes[0],tags):
         sub=s[s.filter_tag==tag]
         for _,r in sub.iterrows():
-            ax.scatter(r.time_ms,r.f1,color=colors[r.beam_width],marker=markers[r.architecture],
+            ax.scatter(r.time_ms,r.f1,color=colors.get(r.beam_width, '#9467bd'),
+                       marker=markers.get(r.architecture, 'o'),
                        alpha=1 if r.pareto else .22,s=25+r.hidden/2,
                        edgecolors='black' if r.pareto else 'none',linewidths=.5)
         ax.step(front.time_ms,front.f1,where='post',c='black',lw=1.2)
