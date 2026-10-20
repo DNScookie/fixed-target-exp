@@ -1,3 +1,8 @@
 data
 !data/simulated_data.json
 .idea
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+pareto_runs/
