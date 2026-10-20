@@ -36,3 +36,4 @@ def to_points_and_labels(
 
     perm = rng.permutation(len(hits))
     return points[perm], labels[perm]
+

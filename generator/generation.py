@@ -30,7 +30,8 @@ def example_generator_config():
 
 def build_naive_detectors(n_layers=7, seed=42):
     exp_setup = ExperimentSetup(
-        bfield=MagneticField(B_vec=np.array([0.0, 0.0, 0.8]), z_start=0.70, z_end=1.60)
+        bfield=MagneticField(B_vec=np.array([0.0, 0.0, 0.8]), z_start=0.70, z_end=1.60),
+        seed=seed,
     )
     for i in range(n_layers):
         exp_setup.add_detector(
@@ -88,3 +89,4 @@ def generate_to_dict(
         "events": [e.to_dict() for e in events],
         "hits": [[h.to_dict() for h in hits] for hits in hit_lists],
     }
+

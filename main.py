@@ -31,3 +31,4 @@ loaded_dict = from_file(filename)
 
 tracks = hits_to_tracks(hits)
 visualize_tracks_2d(hits, tracks, normal=[1, 0, 0])
+
